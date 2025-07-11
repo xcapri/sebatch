@@ -14,13 +14,13 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 
 ## 👀 Show Case
 
-![Sebatch Showcase](docs/showcase.jpeg)
+![Sebatch Showcase](docs/sc.png)
 
 ## 🛠️ Installation
 
 1. **Clone the repository:**
    ```
-   git clone https://github.com/yourusername/sebatch.git
+   git clone https://github.com/xcapri/sebatch.git
    cd sebatch
    ```
 
@@ -136,11 +136,10 @@ name: Subdomain Recon + Vuln Scan
 pipeline:
   - name: subfinder
     cat_base: subdomain
-    output_file: # You can leave blank, default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain}-{output_file}
     command: subfinder -silent -d {domain} -o {output_file}
   
   - name: httpx
-    output_file:
+    output_file: # use output_file to custom prefix
     cat_base: web # you can leave blank
     command: cat subfinder.output_file | httpx -silent -o {output_file}
   
