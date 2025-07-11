@@ -12,6 +12,9 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 - **Real-time Progress**: Live status updates during scanning
 - **Flexible Categories**: Group tools by category (subdomain, vuln-scanner, etc.)
 
+## 👀 Show Case
+
+![Sebatch Showcase](docs/showcase.jpeg)
 
 ## 🛠️ Installation
 
