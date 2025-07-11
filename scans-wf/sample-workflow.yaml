@@ -1,0 +1,36 @@
+name: sample-workflow
+reference: vulnshot.com/sample/blog/post
+pipeline:
+  - name: subfinder
+    cat_base: subdomain # category base of tools / pipeline name, can leave blank, or put whatever you want
+    output_file: # you can add prefix output file name or leave blank (default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain})
+    command: |
+      subfinder -silent -d {domain} -o {output_file} &&
+      echo {domain} >> {output_file}
+
+  - name: dnsgen
+    cat_base: subdomain # category base of tools / pipeline name, can leave blank, or put whatever you want
+    output_file: # you can add prefix output file name or leave blank (default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain})
+    command: cat subfinder.output_file | dnsgen - | tee -a {output_file}
+
+  - name: nuclei
+    cat_base: vuln-scanner # category base of tools / pipeline name, can leave blank, or put whatever you want
+    output_file: # you can add prefix output file name or leave blank (default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain})
+    command: cat subfinder.output_file dnsgen.output_file | nuclei -tags aura,salesforce -silent -o {output_file}
+
+  - name: httpx
+    cat_base: # category base of tools / pipeline name, can leave blank, or put whatever you want
+    output_file: vuln-aura-xbow # sampling adding prefix output file name (default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain}-{output_file})
+    command: 'cat nuclei.output_file | awk "{print $4}" | httpx -silent -path "?aura.tag=<svg%20onload=console.log(%27XSS%27)>&aura.format=JSON" -ms "Format: <svg" -sc -fr -o {output_file}'
+
+  - name: subdosec
+    cat_base: subdomain # category base of tools / pipeline name, can leave blank, or put whatever you want
+    output_file: # you can add prefix output file name or leave blank (default: result will be saved in result-scan/{cat_base}/{pipeline_name}/{domain})
+    command: |
+      cat httpx.output_file| notify -silent -bulk &&
+      cat subfinder.output_file dnsgen.output_file | subdosec -vo -mode private -su | tee -a {output_file}
+
+  - name: notify  
+    cat_base: # category base of tools / pipeline name, can leave blank, or put whatever you want
+    command: |
+      cat subdosec.output_file| notify -silent -bulk  
