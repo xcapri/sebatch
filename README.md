@@ -23,7 +23,7 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 
 2. **Install Python dependencies:**
    ```
-   pip install pyyaml
+   python3 -m pip install pyyaml
    ```
 
 ## 📝 Usage
@@ -39,12 +39,12 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 
 2. **Run a single workflow:**
    ```
-   python sebat.py -c scans-wf/sample-workflow.yaml -t targets.txt
+   python3 sebat.py -c scans-wf/sample-workflow.yaml -t targets.txt
    ```
 
 3. **Run all workflows:**
    ```
-   python sebat.py --all -t targets.txt
+   python3 sebat.py --all -t targets.txt
    ```
 
 ### Advanced Usage
