@@ -66,20 +66,23 @@ def check_cidr(target):
     return target  
 
 def get_output_path(domain, step, date_str):
-    cat_base = step.get("cat_base", "").strip()
+    cat_base = (step.get("cat_base") or "").strip()
     step_name = step["name"]
-    output_file = step.get("output_file", "").strip()
+    output_file = (step.get("output_file") or "").strip()
+    
     # Build directory path
     parts = ["results-scan", domain]
     if cat_base:
         parts.append(cat_base)
     parts.append(step_name)
     dir_path = os.path.join(*parts)
+    
     # Build file name
     if output_file:
         file_name = f"scan-at-{date_str}-{output_file}"
     else:
         file_name = f"scan-at-{date_str}"
+    
     return os.path.join(dir_path, file_name)
 
 def scan_domain(domain, pipeline, date_str):
