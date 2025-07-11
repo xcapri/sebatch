@@ -26,7 +26,14 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 
 2. **Install Python dependencies:**
    ```
-   python3 -m pip install pyyaml
+    # create virtual environment
+    python3 -m venv venv
+
+    # Activated virtual environment
+    source venv/bin/activate
+
+    # Install all packages from requirements.txt
+    pip3 install -r requirements.txt
    ```
 
 ## 📝 Usage
