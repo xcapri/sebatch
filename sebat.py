@@ -8,11 +8,70 @@ import yaml
 from pathlib import Path
 import os
 from datetime import datetime
+import sys
 
 statuses = {}
 resolved_paths_cache = {}
 
 lock = threading.Lock()
+
+# Global verbose logging
+verbose_log_file = None
+verbose_enabled = False
+
+def verbose_log(message, workflow_name=None):
+    """Log verbose messages to both console and file"""
+    global verbose_log_file, verbose_enabled
+    
+    if not verbose_enabled:
+        return
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    prefix = f"[{workflow_name}] " if workflow_name else ""
+    log_message = f"[{timestamp}] {prefix}{message}"
+    
+    # Print to console
+    print(log_message)
+    
+    # Write to log file
+    if verbose_log_file:
+        try:
+            verbose_log_file.write(log_message + "\n")
+            verbose_log_file.flush()  # Ensure immediate write
+        except Exception as e:
+            print(f"Warning: Could not write to verbose log: {e}")
+
+def setup_verbose_logging():
+    """Setup verbose logging to debug folder"""
+    global verbose_log_file, verbose_enabled
+    
+    if not verbose_enabled:
+        return
+    
+    # Create debug folder if it doesn't exist
+    debug_dir = Path("debug")
+    debug_dir.mkdir(exist_ok=True)
+    
+    # Create log file with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f"debug/sebatch_verbose_{timestamp}.log"
+    
+    try:
+        verbose_log_file = open(log_filename, 'w', encoding='utf-8')
+        verbose_log(f"Verbose logging started - Log file: {log_filename}")
+    except Exception as e:
+        print(f"Warning: Could not create verbose log file: {e}")
+        verbose_log_file = None
+
+def cleanup_verbose_logging():
+    """Cleanup verbose logging"""
+    global verbose_log_file
+    if verbose_log_file:
+        try:
+            verbose_log_file.close()
+        except Exception as e:
+            print(f"Warning: Could not close verbose log file: {e}")
+        verbose_log_file = None
 
 def log_status(domain, step, status):
     with lock:
@@ -133,12 +192,14 @@ def is_any_result_exists(domain, step):
             return True
     return False
 
-def scan_domain(domain, pipeline, date_str, skip_if_any_result=True):
+def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_name=None):
     firstdomain = domain 
     domain = check_cidr(domain)   
 
     global resolved_paths_cache
     resolved_paths_cache.setdefault(domain, {})
+
+    verbose_log(f"Starting scan for domain: {domain}", workflow_name)
 
     for step_index, step in enumerate(pipeline):
         name = step["name"]
@@ -157,32 +218,45 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True):
                 resolved_prev_output = resolved_paths_cache[domain].get(prev_step_name)
                 if resolved_prev_output:
                     cmd = cmd.replace(placeholder, resolved_prev_output)
+                    verbose_log(f"Replaced {placeholder} with {resolved_prev_output} for {domain}", workflow_name)
                 else:
+                    verbose_log(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.", workflow_name)
                     print(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.")        
 
         if actual_output_file_path:
             cmd = cmd.replace("{output_file}", actual_output_file_path)
+            verbose_log(f"Output file path: {actual_output_file_path} for {domain}", workflow_name)
 
         if skip_if_any_result and is_any_result_exists(domain, step):
             log_status(domain, name, "skipped")
+            verbose_log(f"Step {name} skipped for {domain} (any result already exists)", workflow_name)
             print(f">> [{name}] skipped for domain: {domain} (any result already exists)")
             continue
 
         if actual_output_file_path and is_output_valid(actual_output_file_path, domain):
             log_status(domain, name, "skipped")
+            verbose_log(f"Step {name} skipped for {domain} (output already exists)", workflow_name)
             print(f">> [{name}] skipped for domain: {domain} (output already exists)")
             continue
 
         log_status(domain, name, "running")
+        verbose_log(f"Executing step {name} for {domain}: {cmd}", workflow_name)
 
-        run_command(cmd)
+        result = run_command(cmd)
+        
+        # Log command output if verbose
+        if result.stdout:
+            verbose_log(f"Command output for {name} on {domain}: {result.stdout[:500]}...", workflow_name)
+        if result.stderr:
+            verbose_log(f"Command stderr for {name} on {domain}: {result.stderr[:500]}...", workflow_name)
 
         log_status(domain, name, "done")
+        verbose_log(f"Completed step {name} for {domain}", workflow_name)
 
 def worker(domains, pipeline, scan_name, date_str, skip_if_any_result=True, all_workflows=None, all_domains=None):
     threads = []
     for domain in domains:
-        t = threading.Thread(target=scan_domain, args=(domain, pipeline, date_str, skip_if_any_result))
+        t = threading.Thread(target=scan_domain, args=(domain, pipeline, date_str, skip_if_any_result, scan_name))
         t.start()
         threads.append(t)
 
@@ -389,7 +463,15 @@ def main():
     parser.add_argument("-rs", "--rescan", action="store_true", help="Force re-scan all steps (ignore existing results)")
     parser.add_argument("-sn", "--show-names", action="store_true", help="Show available workflow names")
     parser.add_argument("-wf", "--workflow", help="Specific workflow name(s), comma-separated (e.g., workflow1,workflow2)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging to debug folder")
     args = parser.parse_args()
+
+    # Setup verbose logging if enabled
+    global verbose_enabled
+    verbose_enabled = args.verbose
+    if verbose_enabled:
+        setup_verbose_logging()
+        verbose_log("Sebatch started with verbose logging enabled")
 
     if args.show_names:
         show_workflow_names()
@@ -401,28 +483,36 @@ def main():
     with open(args.targets) as f:
         all_domains = [line.strip() for line in f if line.strip()]
 
+    verbose_log(f"Loaded {len(all_domains)} targets from {args.targets}")
+
     if args.workflow:
         workflow_names = [name.strip() for name in args.workflow.split(',')]
         configs = load_workflows_by_names(workflow_names)
         if not configs:
             print("[ERROR] No valid workflows specified. Use -sn to see available workflows.")
             return
+        verbose_log(f"Selected workflows: {workflow_names}")
     else:
         configs = load_configs("scans-wf/")
         if not configs:
             print("[ERROR] No workflow files found in scans-wf/ directory!")
             return
+        verbose_log(f"Loaded {len(configs)} workflows from scans-wf/ directory")
 
     date_str = datetime.now().strftime("%Y-%m-%d")
+    verbose_log(f"Scan date: {date_str}")
 
     # Process workflows in parallel
     def run_workflow(config, is_parallel_workflows=False, active_workflows=None):
+        current_scan_name = config.get('name', 'Unknown Scan')
+        
         if not is_parallel_workflows:
             os.system('cls' if os.name == 'nt' else 'clear')
-            current_scan_name = config.get('name', 'Unknown Scan')
             print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
         
+        verbose_log(f"Starting workflow: {current_scan_name}", current_scan_name)
         pipeline = config['pipeline']
+        verbose_log(f"Workflow has {len(pipeline)} steps", current_scan_name)
 
         # Create directories for all domains and steps
         for domain in all_domains:
@@ -430,6 +520,8 @@ def main():
             for step in pipeline:
                 out_path = get_output_path(domain_checked, step, date_str)
                 Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
+        
+        verbose_log(f"Created output directories for {len(all_domains)} domains", current_scan_name)
 
         global resolved_paths_cache
         resolved_paths_cache = {}
@@ -445,11 +537,15 @@ def main():
             batch = all_domains[i:i + args.parallel_targets]
             skip_logic = not args.rescan
             
+            verbose_log(f"Processing batch {i//args.parallel_targets + 1}: {batch}", current_scan_name)
+            
             # Pass workflow info for parallel display
             if is_parallel_workflows:
                 worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, active_workflows, batch)
             else:
                 worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic)
+        
+        verbose_log(f"Completed workflow: {current_scan_name}", current_scan_name)
 
     # Run workflows in parallel if specified
     if args.parallel_workflows > 1 and len(configs) > 1:
@@ -457,6 +553,9 @@ def main():
         workflows_to_run = configs[:args.parallel_workflows]
         print(f"\nRunning {len(workflows_to_run)} workflows (limited by -pw {args.parallel_workflows})")
         print(f"Workflows: {[c.get('name', 'Unknown') for c in workflows_to_run]}")
+        
+        verbose_log(f"Running {len(workflows_to_run)} workflows in parallel (limited by -pw {args.parallel_workflows})")
+        verbose_log(f"Workflow names: {[c.get('name', 'Unknown') for c in workflows_to_run]}")
         
         workflow_threads = []
         for config in workflows_to_run:
@@ -467,12 +566,19 @@ def main():
         # Wait for all workflows to complete
         for t in workflow_threads:
             t.join()
+        
+        verbose_log("All parallel workflows completed")
     else:
         # Run workflows sequentially
+        verbose_log(f"Running {len(configs)} workflows sequentially")
         for config in configs:
             run_workflow(config, False, None)  # False for sequential workflows
 
+    verbose_log("All scans completed")
     print("\n>> All scans completed.")
+    
+    # Cleanup verbose logging
+    cleanup_verbose_logging()
 
 if __name__ == "__main__":
     main()

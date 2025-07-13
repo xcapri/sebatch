@@ -1,0 +1,2 @@
+# This file ensures the debug folder is tracked in git
+# while its contents are ignored via .gitignore 
