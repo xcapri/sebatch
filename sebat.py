@@ -38,7 +38,7 @@ def print_status(domains, steps, scan_name):
         done_count = sum(1 for s in statuses.values() if s == "done" or s == "skipped")
         print(f"\n[WAITING: {waiting_count}] [DONE: {done_count}]\n")
 
-def print_all_workflows_status(workflow_configs, all_domains):
+def print_all_workflows_status(workflow_configs, current_domains):
     """Print status for all workflows running in parallel"""
     with lock:
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -49,7 +49,7 @@ def print_all_workflows_status(workflow_configs, all_domains):
             
             print(f"Scan Progress ({scan_name}):\n")
             
-            for domainx in all_domains:
+            for domainx in current_domains:
                 domain = check_cidr(domainx)
                 line = f"{domain:25} |"
                 for step in pipeline:
@@ -61,7 +61,7 @@ def print_all_workflows_status(workflow_configs, all_domains):
             # Count statuses for this workflow only
             workflow_waiting = 0
             workflow_done = 0
-            for domainx in all_domains:
+            for domainx in current_domains:
                 domain = check_cidr(domainx)
                 for step in pipeline:
                     key = f"{domain}::{step['name']}"
@@ -447,7 +447,7 @@ def main():
             
             # Pass workflow info for parallel display
             if is_parallel_workflows:
-                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, configs, all_domains)
+                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, configs, batch)
             else:
                 worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic)
 
@@ -455,9 +455,12 @@ def main():
     if args.parallel_workflows > 1 and len(configs) > 1:
         print(f"\n🚀 Running {len(configs)} workflows with {args.parallel_workflows} parallel workflows")
         
-        workflow_threads = []
+        # Process workflows in batches
         for i in range(0, len(configs), args.parallel_workflows):
             batch_configs = configs[i:i + args.parallel_workflows]
+            print(f"📦 Processing batch {i//args.parallel_workflows + 1}: {[c.get('name', 'Unknown') for c in batch_configs]}")
+            
+            workflow_threads = []
             for config in batch_configs:
                 t = threading.Thread(target=run_workflow, args=(config, True))  # True for parallel workflows
                 t.start()
@@ -466,7 +469,6 @@ def main():
             # Wait for current batch to complete before starting next batch
             for t in workflow_threads:
                 t.join()
-            workflow_threads = []
     else:
         # Run workflows sequentially
         for config in configs:
