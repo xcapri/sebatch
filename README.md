@@ -8,7 +8,8 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 - **Parallel Processing**: Run multiple domains simultaneously
 - **YAML Configuration**: Easy-to-write scan workflows
 - **Organized Output**: Automatic directory structure with date-based naming
-- **Skip Existing Results**: Smart caching to avoid re-scanning
+- **Smart Skipping**: Automatically skips steps with existing results (by default)
+- **Force Re-scan**: Use `-rs` flag to re-run all steps regardless of existing results
 - **Real-time Progress**: Live status updates during scanning
 - **Flexible Categories**: Group tools by category (subdomain, vuln-scanner, etc.)
 
@@ -47,34 +48,55 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
    echo "demo.net" >> targets.txt
    ```
 
-2. **Run a single workflow:**
+2. **Show available workflows:**
    ```
-   python3 sebat.py -c scans-wf/sample-workflow.yaml -t targets.txt
+   python3 sebat.py -sn
    ```
 
-3. **Run all workflows:**
+3. **Run a specific workflow:**
    ```
-   python3 sebat.py --all -t targets.txt
+   python3 sebat.py -wf sample-workflow -t targets.txt
+   ```
+
+4. **Run multiple workflows:**
+   ```
+   python3 sebat.py -wf workflow1,workflow2 -t targets.txt
+   ```
+
+5. **Run all workflows:**
+   ```
+   python3 sebat.py -t targets.txt
    ```
 
 ### Advanced Usage
 
 ```
-# Run with custom parallel processing (default: 3)
-python sebat.py -c scans-wf/sample-workflow.yaml -t targets.txt -p 5
+# Run with custom parallel targets (default: 3)
+python sebat.py -wf sample-workflow -t targets.txt -pt 5
 
-# Run all workflows with 10 parallel domains
-python sebat.py --all -t targets.txt -p 10
+# Run all workflows with 10 parallel targets
+python sebat.py -t targets.txt -pt 10
+
+# Run multiple workflows in parallel (2 workflows at once)
+python sebat.py -wf workflow1,workflow2 -t targets.txt -pw 2
+
+# Run all workflows with parallel targets and workflows
+python sebat.py -t targets.txt -pt 5 -pw 3
+
+# Force re-scan all steps (ignore existing results)
+python sebat.py -rs -wf sample-workflow -t targets.txt
 ```
 
 ## 📋 Command Line Options
 
 | Option | Description | Required |
 |--------|-------------|----------|
-| `-c, --config` | YAML configuration file | Yes (unless using --all) |
 | `-t, --targets` | File containing target domains | Yes |
-| `-p, --parallel` | Number of domains to process in parallel | No (default: 3) |
-| `--all` | Run all YAML configs in scans-wf/ | No |
+| `-pt, --parallel-targets` | Number of targets to process in parallel | No (default: 3) |
+| `-pw, --parallel-workflows` | Number of workflows to process in parallel | No (default: 1) |
+| `-rs, --rescan` | Force re-scan all steps (ignore existing results) | No |
+| `-sn, --show-names` | Show available workflow names | No |
+| `-wf, --workflow` | Specific workflow name(s), comma-separated | No (runs all if not specified) |
 
 ## 📄 YAML Workflow Configuration
 
