@@ -80,7 +80,9 @@ def log_status(domain, step, status):
 
 def print_status(domains, steps, scan_name):
     with lock:
-        os.system('cls' if os.name == 'nt' else 'clear')
+        # Don't clear screen when verbose is enabled to preserve verbose output
+        if not verbose_enabled:
+            os.system('cls' if os.name == 'nt' else 'clear')
 
         print(f"Scan Progress ({scan_name}):\n")
 
@@ -100,7 +102,9 @@ def print_status(domains, steps, scan_name):
 def print_all_workflows_status(workflow_configs, current_domains):
     """Print status for all workflows running in parallel"""
     with lock:
-        os.system('cls' if os.name == 'nt' else 'clear')
+        # Don't clear screen when verbose is enabled to preserve verbose output
+        if not verbose_enabled:
+            os.system('cls' if os.name == 'nt' else 'clear')
         
         for config in workflow_configs:
             scan_name = config.get('name', 'Unknown Scan')
@@ -507,7 +511,9 @@ def main():
         current_scan_name = config.get('name', 'Unknown Scan')
         
         if not is_parallel_workflows:
-            os.system('cls' if os.name == 'nt' else 'clear')
+            # Don't clear screen when verbose is enabled to preserve verbose output
+            if not verbose_enabled:
+                os.system('cls' if os.name == 'nt' else 'clear')
             print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
         
         verbose_log(f"Starting workflow: {current_scan_name}", current_scan_name)
