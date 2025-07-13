@@ -1,4 +1,4 @@
-name: yudha-workflow
+name: subdo-enum-wf
 reference: vulnshot.com
 pipeline:
   - name: subfinder
