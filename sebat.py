@@ -38,6 +38,42 @@ def print_status(domains, steps, scan_name):
         done_count = sum(1 for s in statuses.values() if s == "done" or s == "skipped")
         print(f"\n[WAITING: {waiting_count}] [DONE: {done_count}]\n")
 
+def print_all_workflows_status(workflow_configs, all_domains):
+    """Print status for all workflows running in parallel"""
+    with lock:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        for config in workflow_configs:
+            scan_name = config.get('name', 'Unknown Scan')
+            pipeline = config['pipeline']
+            
+            print(f"Scan Progress ({scan_name}):\n")
+            
+            for domainx in all_domains:
+                domain = check_cidr(domainx)
+                line = f"{domain:25} |"
+                for step in pipeline:
+                    key = f"{domain}::{step['name']}"
+                    stat = statuses.get(key, "waiting...")
+                    line += f" {step['name']}={stat:15} "
+                print(line)
+            
+            # Count statuses for this workflow only
+            workflow_waiting = 0
+            workflow_done = 0
+            for domainx in all_domains:
+                domain = check_cidr(domainx)
+                for step in pipeline:
+                    key = f"{domain}::{step['name']}"
+                    stat = statuses.get(key, "waiting...")
+                    if stat == "waiting...":
+                        workflow_waiting += 1
+                    elif stat in ["done", "skipped"]:
+                        workflow_done += 1
+            
+            print(f"\n[WAITING: {workflow_waiting}] [DONE: {workflow_done}]\n")
+            print("-" * 80 + "\n")
+
 def run_command(cmd):
     return subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
@@ -143,24 +179,35 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True):
 
         log_status(domain, name, "done")
 
-def worker(domains, pipeline, scan_name, date_str, skip_if_any_result=True):
+def worker(domains, pipeline, scan_name, date_str, skip_if_any_result=True, all_workflows=None, all_domains=None):
     threads = []
     for domain in domains:
         t = threading.Thread(target=scan_domain, args=(domain, pipeline, date_str, skip_if_any_result))
         t.start()
         threads.append(t)
 
-    print_status(domains, pipeline, scan_name)
+    # Use different status display based on whether we're running parallel workflows
+    if all_workflows and all_domains:
+        print_all_workflows_status(all_workflows, all_domains)
+    else:
+        print_status(domains, pipeline, scan_name)
 
     last_print = time.time()
     while any(t.is_alive() for t in threads):
         now = time.time()
         if now - last_print > 1:
-            print_status(domains, pipeline, scan_name)
+            if all_workflows and all_domains:
+                print_all_workflows_status(all_workflows, all_domains)
+            else:
+                print_status(domains, pipeline, scan_name)
             last_print = now
         time.sleep(0.1)
 
-    print_status(domains, pipeline, scan_name)
+    # Final status update
+    if all_workflows and all_domains:
+        print_all_workflows_status(all_workflows, all_domains)
+    else:
+        print_status(domains, pipeline, scan_name)
 
 def load_configs(path):
     configs = []
@@ -369,10 +416,12 @@ def main():
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     # Process workflows in parallel
-    def run_workflow(config):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        current_scan_name = config.get('name', 'Unknown Scan')
-        print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
+    def run_workflow(config, is_parallel_workflows=False):
+        if not is_parallel_workflows:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            current_scan_name = config.get('name', 'Unknown Scan')
+            print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
+        
         pipeline = config['pipeline']
 
         # Create directories for all domains and steps
@@ -395,7 +444,12 @@ def main():
         for i in range(0, len(all_domains), args.parallel_targets):
             batch = all_domains[i:i + args.parallel_targets]
             skip_logic = not args.rescan
-            worker(batch, pipeline, current_scan_name, date_str, skip_logic)
+            
+            # Pass workflow info for parallel display
+            if is_parallel_workflows:
+                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, configs, all_domains)
+            else:
+                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic)
 
     # Run workflows in parallel if specified
     if args.parallel_workflows > 1 and len(configs) > 1:
@@ -405,7 +459,7 @@ def main():
         for i in range(0, len(configs), args.parallel_workflows):
             batch_configs = configs[i:i + args.parallel_workflows]
             for config in batch_configs:
-                t = threading.Thread(target=run_workflow, args=(config,))
+                t = threading.Thread(target=run_workflow, args=(config, True))  # True for parallel workflows
                 t.start()
                 workflow_threads.append(t)
             
@@ -416,7 +470,7 @@ def main():
     else:
         # Run workflows sequentially
         for config in configs:
-            run_workflow(config)
+            run_workflow(config, False)  # False for sequential workflows
 
     print("\n>> All scans completed.")
 
