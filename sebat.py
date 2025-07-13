@@ -158,7 +158,7 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True):
                 if resolved_prev_output:
                     cmd = cmd.replace(placeholder, resolved_prev_output)
                 else:
-                    print(f"⚠️ Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.")        
+                    print(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.")        
 
         if actual_output_file_path:
             cmd = cmd.replace("{output_file}", actual_output_file_path)
@@ -240,19 +240,19 @@ def show_workflow_names():
     workflows = get_workflow_names()
     
     if not workflows:
-        print("❌ No workflow files found in scans-wf/ directory!")
+        print("[ERROR] No workflow files found in scans-wf/ directory!")
         return
     
-    print("\n📋 Available Workflows:")
+    print("\n[LIST] Available Workflows:")
     print("=" * 60)
     
     for i, workflow in enumerate(workflows, 1):
         print(f"{i:2d}. {workflow['name']}")
-        print(f"    📁 File: {workflow['file']}")
-        print(f"    📝 Description: {workflow['description']}")
+        print(f"    [FILE] File: {workflow['file']}")
+        print(f"    [NOTE] Description: {workflow['description']}")
         print()
     
-    print("💡 Usage:")
+    print("[TIP] Usage:")
     print("  python sebat.py -wf workflow-name -t targets.txt")
     print("  python sebat.py -wf workflow1,workflow2 -t targets.txt")
     print("  python sebat.py -t targets.txt  (runs all workflows)")
@@ -273,10 +273,10 @@ def load_workflows_by_names(workflow_names):
                     config['__file'] = file_path
                     configs.append(config)
             except Exception as e:
-                print(f"❌ Error loading workflow '{name}': {e}")
+                print(f"[ERROR] Error loading workflow '{name}': {e}")
         else:
-            print(f"❌ Workflow '{name}' not found!")
-            print(f"💡 Available workflows: {', '.join(available_names.keys())}")
+            print(f"[ERROR] Workflow '{name}' not found!")
+            print(f"[TIP] Available workflows: {', '.join(available_names.keys())}")
     
     return configs
 
@@ -306,10 +306,10 @@ def check_current_results(date_str):
     """Display current scan results for a specific date"""
     results_dir = Path("results-scan")
     if not results_dir.exists():
-        print("❌ No results-scan directory found!")
+        print("[ERROR] No results-scan directory found!")
         return
     
-    print(f"\n📊 Scan Results for Date: {date_str}")
+    print(f"\n[RESULTS] Scan Results for Date: {date_str}")
     print("=" * 60)
     
     found_results = False
@@ -320,7 +320,7 @@ def check_current_results(date_str):
             domain_name = domain_dir.name
             domain_has_results = False
             
-            print(f"\n🌐 Domain: {domain_name}")
+            print(f"\n[DOMAIN] Domain: {domain_name}")
             print("-" * 40)
             
             for category_dir in sorted(domain_dir.iterdir()):
@@ -337,20 +337,20 @@ def check_current_results(date_str):
                                     file_size = file_path.stat().st_size
                                     size_str = f"{file_size} bytes" if file_size < 1024 else f"{file_size/1024:.1f} KB"
                                     
-                                    print(f"  📁 {category_name}/{tool_name}/")
-                                    print(f"      📄 {file_path.name} ({size_str})")
+                                    print(f"  [FILE] {category_name}/{tool_name}/")
+                                    print(f"      [DOC] {file_path.name} ({size_str})")
                                     
                                     try:
                                         with open(file_path, 'r', encoding='utf-8') as f:
                                             lines = f.readlines()[:5] 
                                             if lines:
-                                                print("      📝 Content preview:")
+                                                print("      [NOTE] Content preview:")
                                                 for line in lines:
                                                     print(f"         {line.rstrip()}")
                                                 if len(f.readlines()) > 5:
                                                     print("         ... (more content)")
                                     except Exception as e:
-                                        print(f"      ⚠️  Could not read file: {e}")
+                                        print(f"      [WARNING]  Could not read file: {e}")
                                     
                                     print()
                                     category_has_results = True
@@ -364,22 +364,22 @@ def check_current_results(date_str):
                                 file_size = file_path.stat().st_size
                                 size_str = f"{file_size} bytes" if file_size < 1024 else f"{file_size/1024:.1f} KB"
                                 
-                                print(f"  📁 {category_name}/")
-                                print(f"      📄 {file_path.name} ({size_str})")
+                                print(f"  [FILE] {category_name}/")
+                                print(f"      [DOC] {file_path.name} ({size_str})")
                                 print()
                                 domain_has_results = True
                                 found_results = True
                                 total_files += 1
             
             if not domain_has_results:
-                print("  ❌ No results found for this domain")
+                print("  [ERROR] No results found for this domain")
     
     if not found_results:
-        print(f"❌ No scan results found for date: {date_str}")
-        print("💡 Try running a scan first or check a different date")
+        print(f"[ERROR] No scan results found for date: {date_str}")
+        print("[TIP] Try running a scan first or check a different date")
     else:
-        print(f"\n✅ Found {total_files} result files for {date_str}")
-        print("💡 Use 'python sebat.py -ccr latest' to check the most recent results")
+        print(f"\n[SUCCESS] Found {total_files} result files for {date_str}")
+        print("[TIP] Use 'python sebat.py -ccr latest' to check the most recent results")
 
 def main():
     parser = argparse.ArgumentParser(description="Dynamic YAML-based scan runner")
@@ -405,18 +405,18 @@ def main():
         workflow_names = [name.strip() for name in args.workflow.split(',')]
         configs = load_workflows_by_names(workflow_names)
         if not configs:
-            print("❌ No valid workflows specified. Use -sn to see available workflows.")
+            print("[ERROR] No valid workflows specified. Use -sn to see available workflows.")
             return
     else:
         configs = load_configs("scans-wf/")
         if not configs:
-            print("❌ No workflow files found in scans-wf/ directory!")
+            print("[ERROR] No workflow files found in scans-wf/ directory!")
             return
 
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     # Process workflows in parallel
-    def run_workflow(config, is_parallel_workflows=False):
+    def run_workflow(config, is_parallel_workflows=False, active_workflows=None):
         if not is_parallel_workflows:
             os.system('cls' if os.name == 'nt' else 'clear')
             current_scan_name = config.get('name', 'Unknown Scan')
@@ -447,32 +447,30 @@ def main():
             
             # Pass workflow info for parallel display
             if is_parallel_workflows:
-                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, configs, batch)
+                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, active_workflows, batch)
             else:
                 worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic)
 
     # Run workflows in parallel if specified
     if args.parallel_workflows > 1 and len(configs) > 1:
-        print(f"\n🚀 Running {len(configs)} workflows with {args.parallel_workflows} parallel workflows")
+        # Limit the number of workflows to run based on parallel_workflows
+        workflows_to_run = configs[:args.parallel_workflows]
+        print(f"\nRunning {len(workflows_to_run)} workflows (limited by -pw {args.parallel_workflows})")
+        print(f"Workflows: {[c.get('name', 'Unknown') for c in workflows_to_run]}")
         
-        # Process workflows in batches
-        for i in range(0, len(configs), args.parallel_workflows):
-            batch_configs = configs[i:i + args.parallel_workflows]
-            print(f"📦 Processing batch {i//args.parallel_workflows + 1}: {[c.get('name', 'Unknown') for c in batch_configs]}")
-            
-            workflow_threads = []
-            for config in batch_configs:
-                t = threading.Thread(target=run_workflow, args=(config, True))  # True for parallel workflows
-                t.start()
-                workflow_threads.append(t)
-            
-            # Wait for current batch to complete before starting next batch
-            for t in workflow_threads:
-                t.join()
+        workflow_threads = []
+        for config in workflows_to_run:
+            t = threading.Thread(target=run_workflow, args=(config, True, workflows_to_run))  # True for parallel workflows
+            t.start()
+            workflow_threads.append(t)
+        
+        # Wait for all workflows to complete
+        for t in workflow_threads:
+            t.join()
     else:
         # Run workflows sequentially
         for config in configs:
-            run_workflow(config, False)  # False for sequential workflows
+            run_workflow(config, False, None)  # False for sequential workflows
 
     print("\n>> All scans completed.")
 
