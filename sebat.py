@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 from datetime import datetime
 import sys
+import platform
 
 statuses = {}
 resolved_paths_cache = {}
@@ -18,9 +19,47 @@ lock = threading.Lock()
 # Global verbose logging
 verbose_log_file = None
 verbose_enabled = False
+progress_lines_count = 0  
+
+def show_logs_realtime():
+    debug_dir = Path("debug")
+    if not debug_dir.exists():
+        print("[ERROR] No debug directory found! Run a scan first to generate logs.")
+        return
+    
+    # Get current date and look for today's log file
+    current_date = datetime.now().strftime("%Y%m%d")
+    log_filename = f"sebatch_verbose_{current_date}.log"
+    log_path = debug_dir / log_filename
+    
+    if not log_path.exists():
+        print(f"[ERROR] No log file found for today ({current_date})! Run a scan first to generate logs.")
+        print(f"[INFO] Expected log file: {log_filename}")
+        return
+    
+    print(f"[INFO] Reading log file: {log_filename}")
+    print("[INFO] Press Ctrl+C to stop reading logs")
+    print("-" * 80)
+    
+    try:
+        with open(log_path, 'r', encoding='utf-8') as f:
+            # Read existing content
+            content = f.read()
+            if content:
+                print(content)
+            
+            # Follow new content in real-time
+            while True:
+                new_content = f.read()
+                if new_content:
+                    print(new_content, end='')
+                time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\n[INFO] Log reading stopped")
+    except Exception as e:
+        print(f"[ERROR] Error reading log file: {e}")
 
 def verbose_log(message, workflow_name=None):
-    """Log verbose messages to both console and file"""
     global verbose_log_file, verbose_enabled
     
     if not verbose_enabled:
@@ -30,19 +69,36 @@ def verbose_log(message, workflow_name=None):
     prefix = f"[{workflow_name}] " if workflow_name else ""
     log_message = f"[{timestamp}] {prefix}{message}"
     
-    # Print to console
-    print(log_message)
-    
     # Write to log file
     if verbose_log_file:
         try:
             verbose_log_file.write(log_message + "\n")
-            verbose_log_file.flush()  # Ensure immediate write
+            verbose_log_file.flush()  
         except Exception as e:
             print(f"Warning: Could not write to verbose log: {e}")
 
+def clear_logs():
+    debug_dir = Path("debug")
+    if not debug_dir.exists():
+        print("[INFO] No debug directory found. Nothing to clear.")
+        return
+    
+    log_files = list(debug_dir.glob("sebatch_verbose_*.log"))
+    if not log_files:
+        print("[INFO] No log files found. Nothing to clear.")
+        return
+    
+    count = 0
+    for log_file in log_files:
+        try:
+            log_file.unlink()
+            count += 1
+        except Exception as e:
+            print(f"[WARNING] Could not delete {log_file.name}: {e}")
+    
+    print(f"[SUCCESS] Cleared {count} log files from debug/ directory")
+
 def setup_verbose_logging():
-    """Setup verbose logging to debug folder"""
     global verbose_log_file, verbose_enabled
     
     if not verbose_enabled:
@@ -52,9 +108,9 @@ def setup_verbose_logging():
     debug_dir = Path("debug")
     debug_dir.mkdir(exist_ok=True)
     
-    # Create log file with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"debug/sebatch_verbose_{timestamp}.log"
+    # Create log file with date only (no time)
+    date_str = datetime.now().strftime("%Y%m%d")
+    log_filename = f"debug/sebatch_verbose_{date_str}.log"
     
     try:
         verbose_log_file = open(log_filename, 'w', encoding='utf-8')
@@ -64,7 +120,6 @@ def setup_verbose_logging():
         verbose_log_file = None
 
 def cleanup_verbose_logging():
-    """Cleanup verbose logging"""
     global verbose_log_file
     if verbose_log_file:
         try:
@@ -80,10 +135,10 @@ def log_status(domain, step, status):
 
 def print_status(domains, steps, scan_name):
     with lock:
-        # Don't clear screen when verbose is enabled to preserve verbose output
-        if not verbose_enabled:
-            os.system('cls' if os.name == 'nt' else 'clear')
-
+        # Always clear screen for clean progress display
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        # Print progress at the top
         print(f"Scan Progress ({scan_name}):\n")
 
         for domainx in domains:
@@ -100,11 +155,9 @@ def print_status(domains, steps, scan_name):
         print(f"\n[WAITING: {waiting_count}] [DONE: {done_count}]\n")
 
 def print_all_workflows_status(workflow_configs, current_domains):
-    """Print status for all workflows running in parallel"""
     with lock:
-        # Don't clear screen when verbose is enabled to preserve verbose output
-        if not verbose_enabled:
-            os.system('cls' if os.name == 'nt' else 'clear')
+        # Always clear screen for clean progress display
+        os.system('cls' if os.name == 'nt' else 'clear')
         
         for config in workflow_configs:
             scan_name = config.get('name', 'Unknown Scan')
@@ -225,7 +278,6 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
                     verbose_log(f"Replaced {placeholder} with {resolved_prev_output} for {domain}", workflow_name)
                 else:
                     verbose_log(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.", workflow_name)
-                    print(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.")        
 
         if actual_output_file_path:
             cmd = cmd.replace("{output_file}", actual_output_file_path)
@@ -234,13 +286,11 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
         if skip_if_any_result and is_any_result_exists(domain, step):
             log_status(domain, name, "skipped")
             verbose_log(f"Step {name} skipped for {domain} (any result already exists)", workflow_name)
-            print(f">> [{name}] skipped for domain: {domain} (any result already exists)")
             continue
 
         if actual_output_file_path and is_output_valid(actual_output_file_path, domain):
             log_status(domain, name, "skipped")
             verbose_log(f"Step {name} skipped for {domain} (output already exists)", workflow_name)
-            print(f">> [{name}] skipped for domain: {domain} (output already exists)")
             continue
 
         log_status(domain, name, "running")
@@ -297,7 +347,6 @@ def load_configs(path):
     return configs
 
 def get_workflow_names():
-    """Get list of available workflow names"""
     workflows = []
     for yaml_path in Path("scans-wf/").glob("*.yaml"):
         try:
@@ -314,7 +363,6 @@ def get_workflow_names():
     return workflows
 
 def show_workflow_names():
-    """Display all available workflow names"""
     workflows = get_workflow_names()
     
     if not workflows:
@@ -336,7 +384,6 @@ def show_workflow_names():
     print("  python sebat.py -t targets.txt  (runs all workflows)")
 
 def load_workflows_by_names(workflow_names):
-    """Load specific workflows by name"""
     all_workflows = get_workflow_names()
     available_names = {w['name']: w['file'] for w in all_workflows}
     
@@ -359,7 +406,6 @@ def load_workflows_by_names(workflow_names):
     return configs
 
 def find_latest_scan_date():
-    """Find the most recent scan date from existing results"""
     results_dir = Path("results-scan")
     if not results_dir.exists():
         return None
@@ -381,7 +427,6 @@ def find_latest_scan_date():
     return None
 
 def check_current_results(date_str):
-    """Display current scan results for a specific date"""
     results_dir = Path("results-scan")
     if not results_dir.exists():
         print("[ERROR] No results-scan directory found!")
@@ -467,15 +512,19 @@ def main():
     parser.add_argument("-rs", "--rescan", action="store_true", help="Force re-scan all steps (ignore existing results)")
     parser.add_argument("-sn", "--show-names", action="store_true", help="Show available workflow names")
     parser.add_argument("-wf", "--workflow", help="Specific workflow name(s), comma-separated (e.g., workflow1,workflow2)")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging to debug folder")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show logs in real-time (log reader mode)")
+    parser.add_argument("-cl", "--clear-logs", action="store_true", help="Clear all debug log files")
     args = parser.parse_args()
 
-    # Setup verbose logging if enabled
-    global verbose_enabled
-    verbose_enabled = args.verbose
-    if verbose_enabled:
-        setup_verbose_logging()
-        verbose_log("Sebatch started with verbose logging enabled")
+    # Handle clear logs
+    if args.clear_logs:
+        clear_logs()
+        return
+
+    # Handle verbose as log reader mode
+    if args.verbose:
+        show_logs_realtime()
+        return
 
     if args.show_names:
         show_workflow_names()
@@ -506,14 +555,19 @@ def main():
     date_str = datetime.now().strftime("%Y-%m-%d")
     verbose_log(f"Scan date: {date_str}")
 
+    # Setup verbose logging for file output only
+    global verbose_enabled
+    verbose_enabled = True
+    setup_verbose_logging()
+    verbose_log("Sebatch started with logging enabled")
+
     # Process workflows in parallel
     def run_workflow(config, is_parallel_workflows=False, active_workflows=None):
         current_scan_name = config.get('name', 'Unknown Scan')
         
         if not is_parallel_workflows:
-            # Don't clear screen when verbose is enabled to preserve verbose output
-            if not verbose_enabled:
-                os.system('cls' if os.name == 'nt' else 'clear')
+            # Clear screen for clean display
+            os.system('cls' if os.name == 'nt' else 'clear')
             print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
         
         verbose_log(f"Starting workflow: {current_scan_name}", current_scan_name)
@@ -555,6 +609,9 @@ def main():
 
     # Run workflows in parallel if specified
     if args.parallel_workflows > 1 and len(configs) > 1:
+        # Clear screen for clean display
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
         # Limit the number of workflows to run based on parallel_workflows
         workflows_to_run = configs[:args.parallel_workflows]
         print(f"\nRunning {len(workflows_to_run)} workflows (limited by -pw {args.parallel_workflows})")
@@ -565,7 +622,7 @@ def main():
         
         workflow_threads = []
         for config in workflows_to_run:
-            t = threading.Thread(target=run_workflow, args=(config, True, workflows_to_run))  # True for parallel workflows
+            t = threading.Thread(target=run_workflow, args=(config, True, workflows_to_run)) 
             t.start()
             workflow_threads.append(t)
         
@@ -578,12 +635,10 @@ def main():
         # Run workflows sequentially
         verbose_log(f"Running {len(configs)} workflows sequentially")
         for config in configs:
-            run_workflow(config, False, None)  # False for sequential workflows
+            run_workflow(config, False, None) 
 
     verbose_log("All scans completed")
-    print("\n>> All scans completed.")
     
-    # Cleanup verbose logging
     cleanup_verbose_logging()
 
 if __name__ == "__main__":

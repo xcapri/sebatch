@@ -1,7 +1,7 @@
 # Sebatch 
-> Sebatch (batching scan) is made for those who like to multitask. One cigarette 🚬, and wait for fuck*ng scans done!
+> Sebatch (batching scan) is made for those who like to multitask. One cigarette 🚬, and wait scans done!** 
 
-The ‘oneliner runner’ tool lets you run multiple security scans in parallel across multiple domains. Perfect for security researchers, penetration testers, and bug hunters who want to maximize their scanning efficiency. It's actually a more managed development of oneliner. So just enter your flagship oneliner as the scan workflow config and run scans in parallel.
+The 'oneliner runner' tool lets you run multiple security scans in parallel across multiple domains. Perfect for security researchers, penetration testers, and bug hunters who want to maximize their scanning efficiency. It's actually a more managed development of oneliner. So just enter your flagship oneliner as the scan workflow config and run scans in parallel.
 
 ## 🚀 Features
 
@@ -12,6 +12,7 @@ The ‘oneliner runner’ tool lets you run multiple security scans in parallel 
 - **Force Re-scan**: Use `-rs` flag to re-run all steps regardless of existing results
 - **Real-time Progress**: Live status updates during scanning
 - **Flexible Categories**: Group tools by category (subdomain, vuln-scanner, etc.)
+- **Log Management**: Built-in log reader and log clearing functionality
 
 ## 👀 Show Case
 
@@ -87,16 +88,30 @@ python sebat.py -t targets.txt -pt 5 -pw 3
 python sebat.py -rs -wf sample-workflow -t targets.txt
 ```
 
+### Log Management
+
+```
+# View logs in real-time (log reader mode)
+python sebat.py -v
+
+# Clear all debug log files
+python sebat.py -cl
+```
+
 ## 📋 Command Line Options
 
 | Option | Description | Required |
 |--------|-------------|----------|
-| `-t, --targets` | File containing target domains | Yes |
+| `-t, --targets` | File containing target domains | Yes* |
 | `-pt, --parallel-targets` | Number of targets to process in parallel | No (default: 3) |
 | `-pw, --parallel-workflows` | Number of workflows to process in parallel | No (default: 1) |
 | `-rs, --rescan` | Force re-scan all steps (ignore existing results) | No |
 | `-sn, --show-names` | Show available workflow names | No |
 | `-wf, --workflow` | Specific workflow name(s), comma-separated | No (runs all if not specified) |
+| `-v, --verbose` | Show logs in real-time (log reader mode) | No |
+| `-cl, --clear-logs` | Clear all debug log files | No |
+
+*Required for scanning operations, not required for `-sn`, `-v`, or `-cl` options.
 
 ## 📄 YAML Workflow Configuration
 
@@ -185,8 +200,9 @@ pipeline:
     .. add more tools 
 ```
 
-
 ## 🤝 Contributing
+
+> I'm sure you have your own kitchen secrets. Feel free to put them into a workflow; Sebatch will help run it. However, if you want to share directly, please make a Pull Request.
 
 1. Fork the repository
 2. Create a feature branch
