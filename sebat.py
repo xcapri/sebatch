@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 import sys
 import platform
+from queue import Queue, Empty
 
 statuses = {}
 resolved_paths_cache = {}
@@ -566,7 +567,6 @@ def main():
         current_scan_name = config.get('name', 'Unknown Scan')
         
         if not is_parallel_workflows:
-            # Clear screen for clean display
             os.system('cls' if os.name == 'nt' else 'clear')
             print(f"\n=== Running scan: {current_scan_name} ({config['__file']}) ===")
         
@@ -574,7 +574,6 @@ def main():
         pipeline = config['pipeline']
         verbose_log(f"Workflow has {len(pipeline)} steps", current_scan_name)
 
-        # Create directories for all domains and steps
         for domain in all_domains:
             domain_checked = check_cidr(domain)
             for step in pipeline:
@@ -586,25 +585,63 @@ def main():
         global resolved_paths_cache
         resolved_paths_cache = {}
 
-        # Initialize status for all domains and steps
         for domain in all_domains:
             domain_checked = check_cidr(domain)
             for step in pipeline:
                 log_status(domain_checked, step["name"], "waiting...")
 
-        # Process targets in parallel for this workflow
-        for i in range(0, len(all_domains), args.parallel_targets):
-            batch = all_domains[i:i + args.parallel_targets]
-            skip_logic = not args.rescan
-            
-            verbose_log(f"Processing batch {i//args.parallel_targets + 1}: {batch}", current_scan_name)
-            
-            # Pass workflow info for parallel display
-            if is_parallel_workflows:
-                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic, active_workflows, batch)
-            else:
-                worker(batch, pipeline, config.get('name', 'Unknown Scan'), date_str, skip_logic)
-        
+        from queue import Queue, Empty
+        domain_queue = Queue()
+        for domain in all_domains:
+            domain_queue.put(domain)
+
+        active_domains = set()
+        active_domains_lock = threading.Lock()
+
+        def print_status_active():
+            with active_domains_lock:
+                domains_to_print = list(active_domains)
+            print_status(domains_to_print, pipeline, current_scan_name)
+
+        def domain_worker():
+            while True:
+                try:
+                    domain = domain_queue.get_nowait()
+                except Empty:
+                    break
+                with active_domains_lock:
+                    active_domains.add(domain)
+                skip_logic = not args.rescan
+                scan_domain(domain, pipeline, date_str, skip_logic, current_scan_name)
+                with active_domains_lock:
+                    active_domains.remove(domain)
+                domain_queue.task_done()
+
+        threads = []
+        for _ in range(args.parallel_targets):
+            t = threading.Thread(target=domain_worker)
+            t.start()
+            threads.append(t)
+
+        last_print = time.time()
+        while any(t.is_alive() for t in threads):
+            now = time.time()
+            if now - last_print > 1:
+                if is_parallel_workflows:
+                    print_all_workflows_status(active_workflows, all_domains)
+                else:
+                    print_status_active()
+                last_print = now
+            time.sleep(0.1)
+
+        for t in threads:
+            t.join()
+
+        if is_parallel_workflows:
+            print_all_workflows_status(active_workflows, all_domains)
+        else:
+            print_status_active()
+
         verbose_log(f"Completed workflow: {current_scan_name}", current_scan_name)
 
     # Run workflows in parallel if specified
