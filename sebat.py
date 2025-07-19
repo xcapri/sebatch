@@ -11,6 +11,7 @@ from datetime import datetime
 import sys
 import platform
 from queue import Queue, Empty
+import re
 
 statuses = {}
 resolved_paths_cache = {}
@@ -250,7 +251,36 @@ def is_any_result_exists(domain, step):
             return True
     return False
 
-def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_name=None):
+def find_previous_scan_output(domain, step_name, date_str):
+    """Find output file from previous scans when step is not in current workflow"""
+    # Look for the step in results-scan directory
+    results_dir = Path("results-scan")
+    if not results_dir.exists():
+        return None
+    
+    domain_dir = results_dir / domain
+    if not domain_dir.exists():
+        return None
+    
+    # Search recursively for the step name
+    for category_dir in domain_dir.rglob("*"):
+        if category_dir.is_dir() and category_dir.name == step_name:
+            # Look for scan files in this directory
+            for file_path in category_dir.iterdir():
+                if file_path.is_file() and file_path.name.startswith("scan-at-"):
+                    # Check if it's from today or find the most recent
+                    if date_str in file_path.name:
+                        return str(file_path)
+                    else:
+                        # If not today, find the most recent file
+                        scan_files = [f for f in category_dir.iterdir() if f.is_file() and f.name.startswith("scan-at-")]
+                        if scan_files:
+                            latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
+                            return str(latest_file)
+    
+    return None
+
+def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_name=None, rescan_steps=None):
     firstdomain = domain 
     domain = check_cidr(domain)   
 
@@ -258,6 +288,24 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
     resolved_paths_cache.setdefault(domain, {})
 
     verbose_log(f"Starting scan for domain: {domain}", workflow_name)
+
+    # If rescanning specific steps, determine which steps need to run
+    required_steps = None
+    if isinstance(rescan_steps, list) and len(rescan_steps) == 1:
+        # Single step rescan - find the step and all steps after it
+        target_step = rescan_steps[0]
+        target_index = None
+        
+        # Find the target step index
+        for i, step in enumerate(pipeline):
+            if step['name'] == target_step:
+                target_index = i
+                break
+        
+        if target_index is not None:
+            # Include the target step and all steps after it
+            required_steps = [step['name'] for step in pipeline[target_index:]]
+            verbose_log(f"Rescanning {target_step} - will execute: {required_steps}", workflow_name)
 
     for step_index, step in enumerate(pipeline):
         name = step["name"]
@@ -280,16 +328,50 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
                 else:
                     verbose_log(f"Warning: Reference '{placeholder}' not found for domain {domain} in step {name}. Command might be invalid.", workflow_name)
 
+        # Handle references to steps not in current workflow (from previous scans)
+        # Extract all step references from the command
+        step_references = re.findall(r'(\w+)\.output_file', cmd)
+        
+        for step_name in step_references:
+            placeholder = f"{step_name}.output_file"
+            if placeholder in cmd:
+                # First check if this step exists in current workflow and has been resolved
+                if step_name in resolved_paths_cache[domain] and resolved_paths_cache[domain][step_name]:
+                    # Use the resolved path from current workflow
+                    resolved_output = resolved_paths_cache[domain][step_name]
+                    cmd = cmd.replace(placeholder, resolved_output)
+                    verbose_log(f"Replaced {placeholder} with {resolved_output} for {domain}", workflow_name)
+                else:
+                    # Try to find from previous scans
+                    previous_output = find_previous_scan_output(domain, step_name, date_str)
+                    if previous_output:
+                        cmd = cmd.replace(placeholder, previous_output)
+                        verbose_log(f"Found previous scan output for {step_name}: {previous_output} for {domain}", workflow_name)
+                    else:
+                        verbose_log(f"Warning: Could not find output file for step '{step_name}' in current workflow or previous scans for domain {domain}", workflow_name)
+
         if actual_output_file_path:
             cmd = cmd.replace("{output_file}", actual_output_file_path)
             verbose_log(f"Output file path: {actual_output_file_path} for {domain}", workflow_name)
 
-        if skip_if_any_result and is_any_result_exists(domain, step):
+        # Determine if this step should be rescanned
+        should_rescan = False
+        if rescan_steps is not None:  # Rescan mode is enabled
+            if rescan_steps is True:  # Rescan all steps
+                should_rescan = True
+            elif isinstance(rescan_steps, list):
+                if name in rescan_steps:  # Rescan specific steps
+                    should_rescan = True
+                elif required_steps and name in required_steps:  # Required steps (target + after)
+                    should_rescan = True
+        
+        # Skip logic: if we're not rescanning and results exist, skip
+        if not should_rescan and skip_if_any_result and is_any_result_exists(domain, step):
             log_status(domain, name, "skipped")
             verbose_log(f"Step {name} skipped for {domain} (any result already exists)", workflow_name)
             continue
 
-        if actual_output_file_path and is_output_valid(actual_output_file_path, domain):
+        if not should_rescan and actual_output_file_path and is_output_valid(actual_output_file_path, domain):
             log_status(domain, name, "skipped")
             verbose_log(f"Step {name} skipped for {domain} (output already exists)", workflow_name)
             continue
@@ -301,17 +383,23 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
         
         # Log command output if verbose
         if result.stdout:
-            verbose_log(f"Command output for {name} on {domain}: {result.stdout[:500]}...", workflow_name)
+            verbose_log(f"Command output for {name} on {domain}: {result.stdout}", workflow_name)
+            # Also show output in real-time
+            print(f"\n[OUTPUT] {name} on {domain}:")
+            print(result.stdout)
         if result.stderr:
-            verbose_log(f"Command stderr for {name} on {domain}: {result.stderr[:500]}...", workflow_name)
+            verbose_log(f"Command stderr for {name} on {domain}: {result.stderr}", workflow_name)
+            # Also show stderr in real-time
+            print(f"\n[ERROR] {name} on {domain}:")
+            print(result.stderr)
 
         log_status(domain, name, "done")
         verbose_log(f"Completed step {name} for {domain}", workflow_name)
 
-def worker(domains, pipeline, scan_name, date_str, skip_if_any_result=True, all_workflows=None, all_domains=None):
+def worker(domains, pipeline, scan_name, date_str, skip_if_any_result=True, all_workflows=None, all_domains=None, rescan_steps=None):
     threads = []
     for domain in domains:
-        t = threading.Thread(target=scan_domain, args=(domain, pipeline, date_str, skip_if_any_result, scan_name))
+        t = threading.Thread(target=scan_domain, args=(domain, pipeline, date_str, skip_if_any_result, scan_name, rescan_steps))
         t.start()
         threads.append(t)
 
@@ -505,12 +593,66 @@ def check_current_results(date_str):
         print(f"\n[SUCCESS] Found {total_files} result files for {date_str}")
         print("[TIP] Use 'python sebat.py -ccr latest' to check the most recent results")
 
+def analyze_step_dependencies(pipeline, target_step_name):
+    """Analyze which steps need to run to provide input for the target step"""
+    if target_step_name not in [step['name'] for step in pipeline]:
+        return []
+    
+    # Find the target step index
+    target_index = None
+    for i, step in enumerate(pipeline):
+        if step['name'] == target_step_name:
+            target_index = i
+            break
+    
+    if target_index is None:
+        return []
+    
+    # Find all steps that the target step depends on
+    required_steps = []
+    target_step = pipeline[target_index]
+    target_command = target_step['command']
+    
+    # Check for dependencies in the target step's command
+    for i in range(target_index):
+        prev_step = pipeline[i]
+        prev_step_name = prev_step['name']
+        placeholder = f"{prev_step_name}.output_file"
+        if placeholder in target_command:
+            required_steps.append(prev_step_name)
+    
+    # Add the target step itself
+    required_steps.append(target_step_name)
+    
+    return required_steps
+
+def validate_rescan_steps(step_names, configs):
+    """Validate that the provided step names exist in the workflows"""
+    if not step_names:
+        return True, []
+    
+    all_steps = set()
+    workflow_steps = {}
+    
+    for config in configs:
+        workflow_name = config.get('name', 'Unknown')
+        pipeline = config.get('pipeline', [])
+        workflow_steps[workflow_name] = [step['name'] for step in pipeline]
+        all_steps.update(workflow_steps[workflow_name])
+    
+    invalid_steps = [step for step in step_names if step not in all_steps]
+    
+    if invalid_steps:
+        return False, invalid_steps, workflow_steps
+    
+    return True, []
+
 def main():
     parser = argparse.ArgumentParser(description="Dynamic YAML-based scan runner")
     parser.add_argument("-t", "--targets", help="Target domains file")
     parser.add_argument("-pt", "--parallel-targets", type=int, default=3, help="Number of targets to process in parallel")
     parser.add_argument("-pw", "--parallel-workflows", type=int, default=1, help="Number of workflows to process in parallel")
-    parser.add_argument("-rs", "--rescan", action="store_true", help="Force re-scan all steps (ignore existing results)")
+    parser.add_argument("-rs", "--rescan", nargs='?', const=True, metavar='STEP', help="Force re-scan. Use -rs to rescan all steps, or -rs STEP_NAME to rescan specific step only")
     parser.add_argument("-sn", "--show-names", action="store_true", help="Show available workflow names")
     parser.add_argument("-wf", "--workflow", help="Specific workflow name(s), comma-separated (e.g., workflow1,workflow2)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show logs in real-time (log reader mode)")
@@ -555,6 +697,64 @@ def main():
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     verbose_log(f"Scan date: {date_str}")
+
+    # Process rescan argument
+    rescan_steps = None
+    if args.rescan is not None:
+        if args.rescan is True:
+            # -rs without value: rescan all steps
+            rescan_steps = True
+            verbose_log("Rescan mode: All steps will be rescanned")
+            print("[INFO] Rescan mode: All steps will be rescanned")
+        else:
+            # -rs with value: rescan specific step(s)
+            step_names = [name.strip() for name in args.rescan.split(',')]
+            
+            # Validate step names
+            validation_result = validate_rescan_steps(step_names, configs)
+            if len(validation_result) == 2:
+                is_valid, _ = validation_result
+                if not is_valid:
+                    print(f"[ERROR] Invalid step name(s): {', '.join(step_names)}")
+                    return
+            else:
+                is_valid, invalid_steps, workflow_steps = validation_result
+                if not is_valid:
+                    print(f"[ERROR] Invalid step name(s): {', '.join(invalid_steps)}")
+                    print("\n[INFO] Available steps by workflow:")
+                    for workflow_name, steps in workflow_steps.items():
+                        print(f"  {workflow_name}: {', '.join(steps)}")
+                    print(f"\n[TIP] Use: python sebat.py -rs STEP_NAME -t {args.targets}")
+                    return
+            
+            rescan_steps = step_names
+            verbose_log(f"Rescan mode: Specific steps will be rescanned: {step_names}")
+            
+            # Show which steps will be executed for each workflow
+            print(f"[INFO] Rescan mode: Specific steps will be rescanned: {', '.join(step_names)}")
+            for config in configs:
+                workflow_name = config.get('name', 'Unknown')
+                pipeline = config.get('pipeline', [])
+                
+                if len(step_names) == 1:
+                    # Single step rescan - show target step and all steps after it
+                    target_step = step_names[0]
+                    target_index = None
+                    for i, step in enumerate(pipeline):
+                        if step['name'] == target_step:
+                            target_index = i
+                            break
+                    
+                    if target_index is not None:
+                        steps_to_execute = [step['name'] for step in pipeline[target_index:]]
+                        print(f"[INFO] Workflow '{workflow_name}': Will execute {', '.join(steps_to_execute)} (from {target_step} onwards)")
+                    else:
+                        print(f"[INFO] Workflow '{workflow_name}': Will execute {target_step}")
+                else:
+                    # Multiple steps rescan
+                    print(f"[INFO] Workflow '{workflow_name}': Will execute {', '.join(step_names)}")
+    else:
+        verbose_log("Normal mode: Existing results will be used if available")
 
     # Setup verbose logging for file output only
     global verbose_enabled
@@ -611,8 +811,8 @@ def main():
                     break
                 with active_domains_lock:
                     active_domains.add(domain)
-                skip_logic = not args.rescan
-                scan_domain(domain, pipeline, date_str, skip_logic, current_scan_name)
+                skip_logic = rescan_steps is None  # Only skip if not in rescan mode
+                scan_domain(domain, pipeline, date_str, skip_logic, current_scan_name, rescan_steps)
                 with active_domains_lock:
                     active_domains.remove(domain)
                 domain_queue.task_done()
