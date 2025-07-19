@@ -266,19 +266,114 @@ def find_previous_scan_output(domain, step_name, date_str):
     for category_dir in domain_dir.rglob("*"):
         if category_dir.is_dir() and category_dir.name == step_name:
             # Look for scan files in this directory
+            scan_files = []
+            for file_path in category_dir.iterdir():
+                if file_path.is_file() and file_path.name.startswith("scan-at-"):
+                    scan_files.append(file_path)
+            
+            if scan_files:
+                # Check if it's from today or find the most recent
+                today_files = [f for f in scan_files if date_str in f.name]
+                if today_files:
+                    # If multiple files today, return the first one (or could return all)
+                    return str(today_files[0])
+                else:
+                    # If not today, find the most recent file
+                    latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
+                    return str(latest_file)
+    
+    return None
+
+def find_previous_scan_outputs_with_prefix(domain, step_name, date_str):
+    """Find all output files from previous scans that match a pattern (for wildcard cases)"""
+    # Look for the step in results-scan directory
+    results_dir = Path("results-scan")
+    if not results_dir.exists():
+        return []
+    
+    domain_dir = results_dir / domain
+    if not domain_dir.exists():
+        return []
+    
+    found_files = []
+    
+    # Search recursively for the step name
+    for category_dir in domain_dir.rglob("*"):
+        if category_dir.is_dir() and category_dir.name == step_name:
+            # Look for scan files in this directory
             for file_path in category_dir.iterdir():
                 if file_path.is_file() and file_path.name.startswith("scan-at-"):
                     # Check if it's from today or find the most recent
                     if date_str in file_path.name:
-                        return str(file_path)
+                        found_files.append(str(file_path))
                     else:
-                        # If not today, find the most recent file
+                        # If not today, include if it's the most recent
                         scan_files = [f for f in category_dir.iterdir() if f.is_file() and f.name.startswith("scan-at-")]
                         if scan_files:
                             latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
-                            return str(latest_file)
+                            if str(latest_file) not in found_files:
+                                found_files.append(str(latest_file))
     
-    return None
+    return found_files
+
+def check_required_outputs_exist(domain, pipeline, selected_steps, date_str):
+    """Check if all required output files exist for the selected steps"""
+    missing_files = []
+    required_steps = set()
+    
+    # Find all steps that the selected steps depend on
+    for step_name in selected_steps:
+        # Find the step in pipeline
+        step_index = None
+        for i, step in enumerate(pipeline):
+            if step['name'] == step_name:
+                step_index = i
+                break
+        
+        if step_index is not None:
+            step = pipeline[step_index]
+            command = step['command']
+            
+            # Check for dependencies in the command
+            step_references = re.findall(r'(\w+)\.output_file', command)
+            for dep_step in step_references:
+                if dep_step not in selected_steps:  # Only check non-selected dependencies
+                    required_steps.add(dep_step)
+    
+    # Check if all required output files exist
+    for step_name in required_steps:
+        # Check if this step uses wildcard patterns in any command
+        uses_wildcard = False
+        for step in pipeline:
+            if f"{step_name}.output_file*" in step['command']:
+                uses_wildcard = True
+                break
+        
+        if uses_wildcard:
+            # Use the wildcard function to find all matching files
+            output_files = find_previous_scan_outputs_with_prefix(domain, step_name, date_str)
+            if not output_files:
+                missing_files.append(f"{step_name} (wildcard)")
+        else:
+            # Use the regular function for single file
+            output_path = find_previous_scan_output(domain, step_name, date_str)
+            if not output_path:
+                missing_files.append(step_name)
+    
+    return missing_files, list(required_steps)
+
+def directory_exists_for_step(domain, step):
+    """Check if the directory structure already exists for a step"""
+    cat_base = (step.get("cat_base") or "").strip()
+    step_name = step["name"]
+    
+    parts = ["results-scan", domain]
+    if cat_base:
+        parts.append(cat_base)
+    parts.append(step_name)
+    dir_path = os.path.join(*parts)
+    
+    return os.path.exists(dir_path)
 
 def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_name=None, rescan_steps=None):
     firstdomain = domain 
@@ -334,8 +429,28 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
         
         for step_name in step_references:
             placeholder = f"{step_name}.output_file"
-            if placeholder in cmd:
-                # First check if this step exists in current workflow and has been resolved
+            wildcard_placeholder = f"{step_name}.output_file*"
+            
+            if wildcard_placeholder in cmd:
+                # Handle wildcard pattern
+                if step_name in resolved_paths_cache[domain] and resolved_paths_cache[domain][step_name]:
+                    # Use the resolved path from current workflow
+                    resolved_output = resolved_paths_cache[domain][step_name]
+                    cmd = cmd.replace(wildcard_placeholder, resolved_output + "*")
+                    verbose_log(f"Replaced {wildcard_placeholder} with {resolved_output}* for {domain}", workflow_name)
+                else:
+                    # Try to find from previous scans
+                    output_files = find_previous_scan_outputs_with_prefix(domain, step_name, date_str)
+                    if output_files:
+                        # Replace with the actual file paths
+                        file_pattern = " ".join(output_files)
+                        cmd = cmd.replace(wildcard_placeholder, file_pattern)
+                        verbose_log(f"Found previous scan outputs for {step_name}: {len(output_files)} files for {domain}", workflow_name)
+                    else:
+                        verbose_log(f"Warning: Could not find output files for step '{step_name}' in current workflow or previous scans for domain {domain}", workflow_name)
+            
+            elif placeholder in cmd:
+                # Handle single file reference
                 if step_name in resolved_paths_cache[domain] and resolved_paths_cache[domain][step_name]:
                     # Use the resolved path from current workflow
                     resolved_output = resolved_paths_cache[domain][step_name]
@@ -362,8 +477,26 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
             elif isinstance(rescan_steps, list):
                 if name in rescan_steps:  # Rescan specific steps
                     should_rescan = True
+                    verbose_log(f"Step {name} will run for {domain} (selected step)", workflow_name)
                 elif required_steps and name in required_steps:  # Required steps (target + after)
                     should_rescan = True
+                    verbose_log(f"Step {name} will run for {domain} (required after selected)", workflow_name)
+                else:
+                    # This step is not in the selected steps
+                    # Check if this specific step has output
+                    this_step_has_output = is_any_result_exists(domain, step)
+                    
+                    if this_step_has_output:
+                        # This step has output, so skip it
+                        should_rescan = False
+                        verbose_log(f"Step {name} will be skipped for {domain} (output exists)", workflow_name)
+                    else:
+                        # This step has no output, so run it
+                        should_rescan = True
+                        verbose_log(f"Step {name} will run for {domain} (no output exists)", workflow_name)
+        else:
+            # Normal mode
+            should_rescan = True
         
         # Skip logic: if we're not rescanning and results exist, skip
         if not should_rescan and skip_if_any_result and is_any_result_exists(domain, step):
@@ -375,6 +508,15 @@ def scan_domain(domain, pipeline, date_str, skip_if_any_result=True, workflow_na
             log_status(domain, name, "skipped")
             verbose_log(f"Step {name} skipped for {domain} (output already exists)", workflow_name)
             continue
+
+        # Create output directory only when step is going to run
+        if should_rescan and actual_output_file_path:
+            # Only create directory if it doesn't already exist
+            if not directory_exists_for_step(domain, step):
+                Path(os.path.dirname(actual_output_file_path)).mkdir(parents=True, exist_ok=True)
+                verbose_log(f"Created output directory for {name} on {domain}", workflow_name)
+            else:
+                verbose_log(f"Output directory already exists for {name} on {domain}", workflow_name)
 
         log_status(domain, name, "running")
         verbose_log(f"Executing step {name} for {domain}: {cmd}", workflow_name)
@@ -774,13 +916,10 @@ def main():
         pipeline = config['pipeline']
         verbose_log(f"Workflow has {len(pipeline)} steps", current_scan_name)
 
-        for domain in all_domains:
-            domain_checked = check_cidr(domain)
-            for step in pipeline:
-                out_path = get_output_path(domain_checked, step, date_str)
-                Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
-        
-        verbose_log(f"Created output directories for {len(all_domains)} domains", current_scan_name)
+        # Remove the code that creates all output directories at the start
+        # Directories will be created only when needed during step execution
+
+        verbose_log(f"Starting scan processing for {len(all_domains)} domains", current_scan_name)
 
         global resolved_paths_cache
         resolved_paths_cache = {}
