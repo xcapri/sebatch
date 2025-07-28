@@ -1,0 +1,3 @@
+[critical] sub1.example.com - Aura XSS vulnerability detected
+[high] api.example.com - Salesforce Aura framework exposed
+[medium] www.example.com - Potential Aura injection point 
