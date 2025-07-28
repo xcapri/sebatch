@@ -1,8 +1,13 @@
+# Sebatch specific directories
+results-scan/
+debug/
+scans-wf/
+
 # Test files
 test_*.py
 *_test.py
 test_output_*.py
-
+test*
 
 # Python cache and compiled files
 __pycache__/
@@ -53,3 +58,7 @@ Thumbs.db
 *.tmp
 *.temp
 *.log
+
+# Target files
+targets*.txt
+target*.txt

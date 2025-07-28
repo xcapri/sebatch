@@ -5,22 +5,20 @@ The 'oneliner runner' tool lets you run multiple security scans in parallel acro
 
 ## 🚀 Features
 
-- **Parallel Processing**: Run multiple domains simultaneously
-- **YAML Configuration**: Easy-to-write scan workflows
-- **Organized Output**: Automatic directory structure with date-based naming
-- **Smart Skipping**: Automatically skips steps with existing results (by default)
+- **Parallel Processing**: Run multiple domains, parallel steps in a workflow, and workflows simultaneously with customizable convergence configurations.
+- **YAML Configuration**: Easy-to-write scan workflows with flexible command templating
+- **Smart Skipping**: Automatically skips steps with existing results (by default) for efficiency
 - **Selective Re-scan**: Use `-rs STEP_NAME` to re-run specific steps and all steps after them
 - **Force Re-scan**: Use `-rs` flag to re-run all steps regardless of existing results
-- **Automatic Previous Scan Detection**: Automatically finds and uses output files from previous scans
-- **Real-time Progress**: Live status updates during scanning
-- **Complete Output Display**: See full command output in real-time without truncation
-- **Flexible Categories**: Group tools by category (subdomain, vuln-scanner, etc.)
-- **Log Management**: Built-in log reader and log clearing functionality
-- **Modular Workflows**: Create workflows that reference outputs from other workflows
+- **Real-time Progress**: Live status updates during scanning with unique scan ID tracking
+- **Organized Output**: Automatic directory structure with date-based naming and category organization
+- **Advanced Log Management**: Built-in log reader, log clearing, and scan ID filtering capabilities
+- **Modular Workflows**: Create focused workflows that reference outputs from other workflows
+- **CIDR Support**: Automatic handling of CIDR notation in target files
 
 ## 👀 Show Case
 
-![Sebatch Showcase](docs/sc.png)
+![Sebatch Showcase](docs/demo-v1.0.gif)
 
 ## 🛠️ Installation
 
@@ -69,12 +67,6 @@ python3 sebat.py -rs nuclei -wf sample-workflow -t targets.txt
 
 ## 🔄 Key Features Explained
 
-### Selective Re-scan
-Re-run only specific steps without executing the entire pipeline:
-- `-rs nuclei` - Re-run nuclei and all steps after it
-- `-rs step1,step2` - Re-run multiple specific steps
-- `-rs` - Re-run all steps
-
 ### Modular Workflows
 Create focused workflows that use outputs from previous scans:
 ```yaml
@@ -83,9 +75,6 @@ pipeline:
   - name: nuclei
     command: cat subfinder.output_file | nuclei -silent -o {output_file}
 ```
-
-### Real-time Output
-See complete command output in real-time without truncation for better monitoring and debugging.
 
 ## 📚 Documentation
 
