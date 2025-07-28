@@ -1,0 +1,5 @@
+
+name: threadpool-test
+pipeline:
+  - name: sleepstep
+    command: python -c "import time,random; time.sleep(random.uniform(0.5,2.0))"
