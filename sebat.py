@@ -1081,8 +1081,8 @@ def show_workflow_diagram(workflow_name):
     print(f"Execution Groups: {len(step_groups)}")
     print()
     
-    # Display beautiful ASCII flowchart
-    print("FLOWCHART DIAGRAM:")
+    # Display beautiful ASCII WORKFLOW
+    print("WORKFLOW DIAGRAM:")
     print()
     
     # Calculate the maximum step name length for proper box sizing
