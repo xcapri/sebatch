@@ -1055,6 +1055,114 @@ def print_completion_message(date_str, total_domains, total_workflows):
     print()
     print("=" * 80)
 
+def show_workflow_diagram(workflow_name):
+    """Display a beautiful workflow diagram for a specific workflow"""
+    # Load the workflow
+    configs = load_workflows_by_names([workflow_name])
+    if not configs:
+        print(f"[ERROR] Workflow '{workflow_name}' not found!")
+        print("[TIP] Use 'python sebat.py -sn' to see available workflows")
+        return
+    
+    config = configs[0]
+    pipeline = config.get('pipeline', [])
+    description = config.get('description', 'No description')
+    reference = config.get('reference', 'No reference')
+    
+    # Analyze pipeline dependencies
+    step_groups = analyze_pipeline_dependencies(pipeline)
+    
+    print("\n" + "=" * 80)
+    print(f"WORKFLOW DIAGRAM: {workflow_name.upper()}")
+    print("=" * 80)
+    print(f"Description: {description}")
+    print(f"Reference: {reference}")
+    print(f"Total Steps: {len(pipeline)}")
+    print(f"Execution Groups: {len(step_groups)}")
+    print()
+    
+    # Display beautiful ASCII flowchart
+    print("FLOWCHART DIAGRAM:")
+    print()
+    
+    # Calculate the maximum step name length for proper box sizing
+    max_step_length = 0
+    for group in step_groups:
+        for step in group['steps']:
+            max_step_length = max(max_step_length, len(step['name']))
+    
+    # Ensure minimum width
+    box_width = max(max_step_length + 4, 12)
+    
+    # Start with target
+    print(" " * 20 + "┌─────────┐")
+    print(" " * 20 + "│  TARGET │")
+    print(" " * 20 + "└─────────┘")
+    print(" " * 20 + "     │")
+    print(" " * 20 + "     ▼")
+    
+    for i, group in enumerate(step_groups):
+        group_name = group['cat_base'] if group['cat_base'] else 'general'
+        steps = group['steps']
+        
+        if len(steps) == 1:
+            # Single step - simple flow
+            step = steps[0]
+            step_name = step['name']
+            
+            # Center the step name in the box
+            padding = (box_width - len(step_name)) // 2
+            left_pad = padding
+            right_pad = box_width - len(step_name) - left_pad
+            
+            print(" " * 20 + "┌" + "─" * box_width + "┐")
+            print(" " * 20 + "│" + " " * left_pad + step_name + " " * right_pad + "│")
+            print(" " * 20 + "└" + "─" * box_width + "┘")
+            
+            if i < len(step_groups) - 1:
+                print(" " * 20 + "     │")
+                print(" " * 20 + "     ▼")
+        
+        else:
+            # Multiple steps - show parallel execution
+            if group['parallel']:
+                # Parallel execution
+                print(" " * 20 + "┌" + "─" * box_width + "┐")
+                
+                for j, step in enumerate(steps):
+                    step_name = step['name']
+                    padding = (box_width - len(step_name)) // 2
+                    left_pad = padding
+                    right_pad = box_width - len(step_name) - left_pad
+                    
+                    print(" " * 20 + "│" + " " * left_pad + step_name + " " * right_pad + "│")
+                
+                print(" " * 20 + "└" + "─" * box_width + "┘")
+                print(" " * 20 + "     │")
+                print(" " * 20 + "     ▼")
+            else:
+                # Sequential execution within group
+                for j, step in enumerate(steps):
+                    step_name = step['name']
+                    padding = (box_width - len(step_name)) // 2
+                    left_pad = padding
+                    right_pad = box_width - len(step_name) - left_pad
+                    
+                    print(" " * 20 + "┌" + "─" * box_width + "┐")
+                    print(" " * 20 + "│" + " " * left_pad + step_name + " " * right_pad + "│")
+                    print(" " * 20 + "└" + "─" * box_width + "┘")
+                    
+                    if j < len(steps) - 1:
+                        print(" " * 20 + "     │")
+                        print(" " * 20 + "     ▼")
+                    elif i < len(step_groups) - 1:
+                        print(" " * 20 + "     │")
+                        print(" " * 20 + "     ▼")
+    
+    print(" " * 20 + "┌─────────┐")
+    print(" " * 20 + "│ RESULTS │")
+    print(" " * 20 + "└─────────┘")
+
 def validate_rescan_steps(step_names, configs):
     """Validate that the provided step names exist in the workflows"""
     if not step_names:
@@ -1083,6 +1191,7 @@ def main():
     parser.add_argument("-pw", "--parallel-workflows", type=int, default=1, help="Number of workflows to process in parallel")
     parser.add_argument("-rs", "--rescan", nargs='?', const=True, metavar='STEP', help="Force re-scan. Use -rs to rescan all steps, or -rs STEP_NAME to rescan specific step only")
     parser.add_argument("-sn", "--show-names", action="store_true", help="Show available workflow names")
+    parser.add_argument("-sw", "--show-workflow", metavar='WORKFLOW_NAME', help="Show beautiful workflow diagram for specific workflow")
     parser.add_argument("-wf", "--workflow", help="Specific workflow name(s), comma-separated (e.g., workflow1,workflow2)")
     parser.add_argument("-v", "--verbose", nargs='?', const='all', metavar='SID', help="Show logs in real-time. Use '-v' for all logs or '-v SID' for specific scan")
     parser.add_argument("-vl", "--view-logs", action="store_true", help="List available log files")
@@ -1106,6 +1215,10 @@ def main():
 
     if args.show_names:
         show_workflow_names()
+        return
+
+    if args.show_workflow:
+        show_workflow_diagram(args.show_workflow)
         return
 
     if not args.targets:
@@ -1226,7 +1339,67 @@ def main():
         for domain in all_domains:
             domain_checked = check_cidr(domain)
             for step in pipeline:
-                log_status(domain_checked, step["name"], "waiting...")
+                # Initialize status based on rescan mode
+                if rescan_steps is not None:
+                    if rescan_steps is True:
+                        # Force rescan all steps
+                        log_status(domain_checked, step["name"], "waiting...")
+                    elif isinstance(rescan_steps, list):
+                        # For specific rescan, determine which steps will actually run
+                        if len(rescan_steps) == 1:
+                            # Single step rescan - find the target step and all steps after it
+                            target_step = rescan_steps[0]
+                            target_index = None
+                            for i, pipeline_step in enumerate(pipeline):
+                                if pipeline_step['name'] == target_step:
+                                    target_index = i
+                                    break
+                            
+                            if target_index is not None:
+                                # All steps from target_index onwards will run
+                                steps_to_run = [s['name'] for s in pipeline[target_index:]]
+                                if step["name"] in steps_to_run:
+                                    log_status(domain_checked, step["name"], "waiting...")
+                                else:
+                                    # Step is not in the dependency chain, mark as skipped if it has output
+                                    if is_any_result_exists(domain_checked, step):
+                                        log_status(domain_checked, step["name"], "skipped")
+                                    else:
+                                        log_status(domain_checked, step["name"], "waiting...")
+                            else:
+                                # Target step not found, use original logic
+                                if step["name"] in rescan_steps:
+                                    log_status(domain_checked, step["name"], "waiting...")
+                                else:
+                                    if is_any_result_exists(domain_checked, step):
+                                        log_status(domain_checked, step["name"], "skipped")
+                                    else:
+                                        log_status(domain_checked, step["name"], "waiting...")
+                        else:
+                            # Multiple steps rescan - use original logic
+                            if step["name"] in rescan_steps:
+                                log_status(domain_checked, step["name"], "waiting...")
+                            else:
+                                if is_any_result_exists(domain_checked, step):
+                                    log_status(domain_checked, step["name"], "skipped")
+                                else:
+                                    log_status(domain_checked, step["name"], "waiting...")
+                else:
+                    # Smart mode: check if output exists
+                    # Determine skip logic based on scan mode
+                    if scan_mode == "smart":
+                        skip_logic = True  # Smart mode: skip if results exist
+                    elif scan_mode == "force_all":
+                        skip_logic = False  # Force all: never skip
+                    elif scan_mode == "force_specific":
+                        skip_logic = False  # Force specific: never skip (handled by rescan_steps)
+                    else:
+                        skip_logic = True  # Default to smart mode
+                    
+                    if skip_logic and is_any_result_exists(domain_checked, step):
+                        log_status(domain_checked, step["name"], "skipped")
+                    else:
+                        log_status(domain_checked, step["name"], "waiting...")
 
         from queue import Queue, Empty
         domain_queue = Queue()
