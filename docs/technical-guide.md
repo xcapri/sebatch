@@ -12,6 +12,7 @@ This document contains detailed technical information, command examples, and adv
 | `-pw, --parallel-workflows` | Number of workflows to process in parallel | No | 1 | `-pw 2` |
 | `-rs, --rescan [STEP]` | Force re-scan. Use `-rs` for all steps, or `-rs STEP_NAME` for specific step(s) | No | - | `-rs nuclei` |
 | `-sn, --show-names` | Show available workflow names and descriptions | No | - | `-sn` |
+| `-sw, --show-workflow` | Show beautiful ASCII workflow diagram for specific workflow | No | - | `-sw workflow-name` |
 | `-wf, --workflow` | Specific workflow name(s), comma-separated | No | All workflows | `-wf workflow1,workflow2` |
 | `-v, --verbose [SID]` | Show logs in real-time. Use `-v` for all logs or `-v SID` for specific scan | No | - | `-v` or `-v 12345` |
 | `-vl, --view-logs` | List available log files with size and scan information | No | - | `-vl` |
@@ -25,6 +26,7 @@ This document contains detailed technical information, command examples, and adv
 - `-t, --targets`: Specify the file containing target domains or IP ranges
 - `-wf, --workflow`: Select specific workflows to run (comma-separated)
 - `-sn, --show-names`: List all available workflows with descriptions
+- `-sw, --show-workflow`: Display beautiful ASCII workflow diagram for specific workflow
 
 #### ⚡ **Performance & Concurrency**
 - `-pt, --parallel-targets`: Control how many domains are processed simultaneously
@@ -94,8 +96,14 @@ python sebat.py -vl
 python sebat.py -cl
 ```
 
-#### Workflow Discovery
+#### Workflow Discovery & Visualization
 ```bash
 # List all available workflows
 python sebat.py -sn
+
+# Show workflow diagram for specific workflow
+python sebat.py -sw sample-workflow
+
+# Show workflow diagram for any workflow
+python sebat.py -sw workflow-name
 ```

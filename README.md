@@ -1,15 +1,16 @@
 # Sebatch 
-> Sebatch (batching scan) is made for those who like to multitask. One cigarette 🚬, and wait scans done!** 
 
-The 'oneliner runner' tool lets you run multiple security scans in parallel across multiple domains. Perfect for security researchers, penetration testers, and bug hunters who want to maximize their scanning efficiency. It's actually a more managed development of oneliner. So just enter your flagship oneliner as the scan workflow config and run scans in parallel.
+> Sebatch (*Batch*ing *s*can *e*ngine)is made for those who like to multitask. One cigarette 🚬, and wait scans done!
+
+
+Sebatch is a streamlined evolution of the classic oneliner tool, designed to run multiple security scans in parallel across many domains. Ideal for security researchers, pentesters, and bug hunters who want efficient, configurable, and parallelized scanning. Just plug in your favorite oneliner as a scan workflow — and go!
 
 ## 🚀 Features
 
 - **Parallel Processing**: Run multiple domains, parallel steps in a workflow, and workflows simultaneously with customizable convergence configurations.
-- **YAML Configuration**: Easy-to-write scan workflows with flexible command templating
+- **YAML Configuration**: Easy to write with flexible command templates, as well as workflow visualization through diagrams.
 - **Smart Skipping**: Automatically skips steps with existing results (by default) for efficiency
-- **Selective Re-scan**: Use `-rs STEP_NAME` to re-run specific steps and all steps after them
-- **Force Re-scan**: Use `-rs` flag to re-run all steps regardless of existing results
+- **Re-scan**: Automatic rescan by spesific step or all step.
 - **Real-time Progress**: Live status updates during scanning with unique scan ID tracking
 - **Organized Output**: Automatic directory structure with date-based naming and category organization
 - **Advanced Log Management**: Built-in log reader, log clearing, and scan ID filtering capabilities
@@ -17,6 +18,7 @@ The 'oneliner runner' tool lets you run multiple security scans in parallel acro
 - **CIDR Support**: Automatic handling of CIDR notation in target files
 
 ## 👀 Show Case
+
 
 ![Sebatch Showcase](docs/demo-v1.0.gif)
 
