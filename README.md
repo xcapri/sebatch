@@ -3,19 +3,22 @@
 > Sebatch (*Batch*ing *s*can *e*ngine)is made for those who like to multitask. One cigarette 🚬, and wait scans done!
 
 
-Sebatch is a streamlined evolution of the classic oneliner tool, designed to run multiple security scans in parallel across many domains. Ideal for security researchers, pentesters, and bug hunters who want efficient, configurable, and parallelized scanning. Just plug in your favorite oneliner as a scan workflow — and go!
+
+Sebatch is a streamlined evolution of the classic oneliner tool, designed to run multiple security scans in parallel across many domains. Ideal for bug hunters who want efficient, configurable, and parallelized scanning. Just plug in your *favorite oneliner* or *hacking style* as a scanning workflow — and get started!
 
 ## 🚀 Features
 
-- **Parallel Processing**: Run multiple domains, parallel steps in a workflow, and workflows simultaneously with customizable convergence configurations.
-- **YAML Configuration**: Easy to write with flexible command templates, as well as workflow visualization through diagrams.
-- **Smart Skipping**: Automatically skips steps with existing results (by default) for efficiency
-- **Re-scan**: Automatic rescan by spesific step or all step.
-- **Real-time Progress**: Live status updates during scanning with unique scan ID tracking
-- **Organized Output**: Automatic directory structure with date-based naming and category organization
-- **Advanced Log Management**: Built-in log reader, log clearing, and scan ID filtering capabilities
-- **Modular Workflows**: Create focused workflows that reference outputs from other workflows
-- **CIDR Support**: Automatic handling of CIDR notation in target files
+| Feature | Description |
+|---------|-------------|
+| **Parallel Processing** | Run multiple domains, parallel steps in a workflow, and workflows simultaneously with customizable convergence configurations. |
+| **YAML Configuration** | Easy to write with flexible command templates, as well as workflow visualization through diagrams. |
+| **Smart Skipping** | Automatically skips steps with existing results (by default) for efficiency |
+| **Re-scan** | Automatic rescan by specific step or all steps. |
+| **Real-time Progress** | Live status updates during scanning with unique scan ID tracking |
+| **Organized Output** | Automatic directory structure with date-based naming and category organization |
+| **Advanced Log Management** | Built-in log reader, log clearing, and scan ID filtering capabilities |
+| **Modular Workflows** | Create focused workflows that reference outputs from other workflows |
+| **CIDR Support** | Automatic handling of CIDR notation in target files |
 
 ## 👀 Show Case
 
@@ -110,7 +113,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
-- [ProjectDiscovery](https://projectdiscovery.io/) for amazing security tools
+The predecessor tools that inspired the creation of sebatch tools.
+
+- [Trickest](https://trickest.com/)
+- [ProjectDiscovery](https://projectdiscovery.io/)
 - [Awesome One-liner Bug Bounty](https://github.com/dwisiswant0/awesome-oneliner-bugbounty)
 - The bug bounty community for inspiration and feedback
 
