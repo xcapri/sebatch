@@ -1185,7 +1185,7 @@ def validate_rescan_steps(step_names, configs):
     return True, []
 
 def main():
-    parser = argparse.ArgumentParser(description="Dynamic YAML-based scan runner")
+    parser = argparse.ArgumentParser(description="Batching scan engine")
     parser.add_argument("-t", "--targets", help="Target domains file")
     parser.add_argument("-pt", "--parallel-targets", type=int, default=3, help="Number of targets to process in parallel")
     parser.add_argument("-pw", "--parallel-workflows", type=int, default=1, help="Number of workflows to process in parallel")
@@ -1222,7 +1222,8 @@ def main():
         return
 
     if not args.targets:
-        parser.error("Targets file (-t) is required for scanning. Use -sn to show available workflows.")
+        parser.print_help()
+        return
 
     with open(args.targets) as f:
         all_domains = [line.strip() for line in f if line.strip()]
