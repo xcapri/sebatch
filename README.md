@@ -6,6 +6,9 @@
 
 Sebatch is a streamlined evolution of the classic oneliner tool, designed to run multiple security tools in parallel across many domains. Ideal for bug hunters who want efficient, configurable, and parallelized scanning. Just plug in your *favorite oneliner* or *hacking style* as a scanning workflow — and get started!
 
+## Source of the problem
+Sometimes we (or maybe just me?) want to create a single script for a one-for-all scan  so that everything runs in one workflow according to each person's hacking style. But the problem is, every time we want to add a new tool, we have to tweak the script again. That's why I created this sebatch tool. So, we just need to edit the workflow, then run it in a sebatch.
+
 ## 🚀 Features
 
 | Feature | Description |
