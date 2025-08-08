@@ -101,6 +101,12 @@ The predecessor tools that inspired the creation of sebatch tools.
 - [Awesome One-liner Bug Bounty](https://github.com/dwisiswant0/awesome-oneliner-bugbounty)
 - The bug bounty community for inspiration and feedback
 
+## 🔗 Similar Tools
+- [EWE - Execution Workflow Engine](https://github.com/justakazh/ewe) 
+- [Termaid is a term (pun intended) for Terminal-Mermaid](https://github.com/MKlolbullen/termaid) 
+- [Execute Trickest workflows right from your terminal](https://github.com/trickest/trickest-cli) 
+- etc.
+
 ---
 
 **Happy scanning! 🚬💨 Remember: One cigarette, and wait scans done!** 
