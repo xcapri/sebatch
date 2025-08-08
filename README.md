@@ -68,35 +68,13 @@ python3 sebat.py -wf sample-workflow -t targets.txt
 python3 sebat.py -rs nuclei -wf sample-workflow -t targets.txt
 ```
 
-> 💡 **Need more examples?** Check out the **[Technical Guide](docs/technical-guide.md)** for advanced usage, workflow templates, and troubleshooting tips.
-
-## 🔄 Key Features Explained
-
-### Modular Workflows
-Create focused workflows that use outputs from previous scans:
-```yaml
-name: nuclei-only
-pipeline:
-  - name: nuclei
-    command: cat subfinder.output_file | nuclei -silent -o {output_file}
-```
 
 ## 📚 Documentation
+💡 **Need more examples?** Check out the **[Technical Guide](docs/technical-guide.md)** for advanced usage, workflow templates, and troubleshooting tips.
 
-### 📖 [Technical Guide](docs/technical-guide.md)
-Complete technical reference including:
-- **Command Line Options** - All available flags and parameters
-- **Advanced Usage Examples** - Complex command combinations
-- **YAML Configuration** - Detailed workflow configuration guide
-- **Selective Re-scan** - Complete feature documentation
-- **Modular Workflows** - How to create and use modular workflows
-- **Troubleshooting** - Common issues and solutions
-- **Performance Optimization** - Best practices for optimal usage
 
-### 🔗 Quick Links
-- **[Workflow Examples](docs/technical-guide.md#creating-custom-workflows)** - Ready-to-use workflow templates
-- **[Troubleshooting Guide](docs/technical-guide.md#troubleshooting)** - Common issues and solutions
-- **[Command Reference](docs/technical-guide.md#command-line-options)** - Complete CLI documentation
+
+
 
 ## 🤝 Contributing
 
