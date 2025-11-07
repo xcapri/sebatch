@@ -434,11 +434,11 @@ def find_previous_scan_output(domain, step_name, date_str):
     results_dir = Path("results-scan")
     if not results_dir.exists():
         return None
-    
+
     domain_dir = results_dir / domain
     if not domain_dir.exists():
         return None
-    
+
     # Search recursively for the step name
     for category_dir in domain_dir.rglob("*"):
         if category_dir.is_dir() and category_dir.name == step_name:
@@ -447,18 +447,20 @@ def find_previous_scan_output(domain, step_name, date_str):
             for file_path in category_dir.iterdir():
                 if file_path.is_file() and file_path.name.startswith("scan-at-"):
                     scan_files.append(file_path)
-            
+
             if scan_files:
-                # Check if it's from today or find the most recent
+                # First priority: check if it's from today
                 today_files = [f for f in scan_files if date_str in f.name]
                 if today_files:
-                    # If multiple files today, return the first one (or could return all)
-                    return str(today_files[0])
+                    # If multiple files today, return the most recent one
+                    latest_today = max(today_files, key=lambda x: x.stat().st_mtime)
+                    return str(latest_today)
                 else:
-                    # If not today, find the most recent file
+                    # If not today, find the most recent file regardless of date
+                    # This handles cases where previous steps ran on different days
                     latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
                     return str(latest_file)
-    
+
     return None
 
 def find_previous_scan_outputs_with_prefix(domain, step_name, date_str):
@@ -467,30 +469,31 @@ def find_previous_scan_outputs_with_prefix(domain, step_name, date_str):
     results_dir = Path("results-scan")
     if not results_dir.exists():
         return []
-    
+
     domain_dir = results_dir / domain
     if not domain_dir.exists():
         return []
-    
+
     found_files = []
-    
+
     # Search recursively for the step name
     for category_dir in domain_dir.rglob("*"):
         if category_dir.is_dir() and category_dir.name == step_name:
             # Look for scan files in this directory
-            for file_path in category_dir.iterdir():
-                if file_path.is_file() and file_path.name.startswith("scan-at-"):
-                    # Check if it's from today or find the most recent
-                    if date_str in file_path.name:
-                        found_files.append(str(file_path))
-                    else:
-                        # If not today, include if it's the most recent
-                        scan_files = [f for f in category_dir.iterdir() if f.is_file() and f.name.startswith("scan-at-")]
-                        if scan_files:
-                            latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
-                            if str(latest_file) not in found_files:
-                                found_files.append(str(latest_file))
-    
+            scan_files = [f for f in category_dir.iterdir() if f.is_file() and f.name.startswith("scan-at-")]
+
+            if scan_files:
+                # First priority: get files from today
+                today_files = [f for f in scan_files if date_str in f.name]
+                if today_files:
+                    found_files.extend([str(f) for f in today_files])
+                else:
+                    # If not today, get the most recent file regardless of date
+                    # This handles cases where previous steps ran on different days
+                    latest_file = max(scan_files, key=lambda x: x.stat().st_mtime)
+                    if str(latest_file) not in found_files:
+                        found_files.append(str(latest_file))
+
     return found_files
 
 def check_required_outputs_exist(domain, pipeline, selected_steps, date_str):
