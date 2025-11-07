@@ -591,7 +591,11 @@ def execute_single_step_logic(domain, step, date_str, skip_if_any_result=True, w
     
     if resolved_paths_cache is None:
         resolved_paths_cache = {}
-    
+
+    # Ensure domain key exists in cache
+    if domain not in resolved_paths_cache:
+        resolved_paths_cache[domain] = {}
+
     name = step["name"]
     actual_output_file_path = get_output_path(domain, step, date_str)
     resolved_paths_cache[domain][name] = actual_output_file_path
@@ -672,6 +676,11 @@ def execute_single_step_logic(domain, step, date_str, skip_if_any_result=True, w
     # If step should be skipped, mark it and return
     if not should_rescan:
         log_status(domain, name, "skipped")
+        # Still need to cache the previous output for dependent steps!
+        previous_output = find_previous_scan_output(domain, name, date_str)
+        if previous_output:
+            resolved_paths_cache[domain][name] = previous_output
+            verbose_log(f"Step {name} skipped for {domain}, but cached previous output: {previous_output}", workflow_name)
         return
 
     # Create output directory
